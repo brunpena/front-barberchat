@@ -34,7 +34,7 @@ export default function Cabecalho(): JSX.Element {
     }, [open]);
 
     return (
-        <header className="bg-red-800 w-full min-h-[64px] flex items-center justify-between px-4 py-3">
+        <header className="bg-red-800 w-full min-h-[64px] flex items-center justify-between px-4 py-3 fixed top-0 z-50">
             {/* Left: logo + title */}
             <div className="flex items-center gap-4">
                 {/* arquivo: public/globe.svg -> acessível em /globe.svg */}

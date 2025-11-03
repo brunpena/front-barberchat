@@ -11,7 +11,7 @@ import ChatInput from "@/components/WhatsAppChat";
 type Mensage = { from: "bot" | "user"; text: string };
 
 export default function ChatRunner() {
-  const steps = PrimeiraVez.steps;
+  const steps: any[] = PrimeiraVez.steps || [];
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mensages, setMensages] = useState<Mensage[]>([]);
   const [waitingUser, setWaitingUser] = useState(false);
@@ -24,22 +24,77 @@ export default function ChatRunner() {
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const emittedStepsRef = useRef<Set<number>>(new Set()); // evita re-emissão
 
-  // auto-scroll
+  // mounted flag (para evitar hydratation mismatch)
+  const [mounted, setMounted] = useState(false);
+
+  // --- header height logic -----------------------
+  const [headerHeight, setHeaderHeight] = useState<number>(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // measure header height after mount; re-measure on resize
+  useEffect(() => {
+    if (!mounted) return;
+    const findHeader = () =>
+      document.querySelector<HTMLElement>("header") ||
+      document.getElementById("cabecalho") ||
+      document.querySelector<HTMLElement>("[data-layout-header]");
+
+    const update = () => {
+      const headerEl = findHeader();
+      const h = headerEl ? headerEl.getBoundingClientRect().height : 0;
+      setHeaderHeight(h);
+    };
+
+    update();
+    window.addEventListener("resize", update);
+    // also observe potential header size change (optional)
+    let ro: ResizeObserver | null = null;
+    const hdr = document.querySelector<HTMLElement>("header") || document.getElementById("cabecalho") || document.querySelector<HTMLElement>("[data-layout-header]");
+    if (hdr && "ResizeObserver" in window) {
+      ro = new ResizeObserver(() => update());
+      ro.observe(hdr);
+    }
+
+    return () => {
+      window.removeEventListener("resize", update);
+      if (ro) ro.disconnect();
+    };
+  }, [mounted]);
+  // -----------------------------------------------
+
+  // auto-scroll quando mensagens mudam
   useEffect(() => {
     const el = containerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }, [mensages]);
 
-  // bloqueia scroll do body enquanto o componente estiver montado (mobile full-screen também)
+  // bloquear scroll do body apenas quando montado (evita acessar document no SSR)
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!mounted) return;
     const original = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = original || "";
     };
-  }, []);
+  }, [mounted]);
+
+  // helpers para pegar message1/message2 mesmo com typos
+  function getStepField(step: any, fieldBase: "message1" | "message2") {
+    const candidates =
+      fieldBase === "message1"
+        ? ["message1", "mensage1", "messag1", "mensagem1", "message"]
+        : ["message2", "mensage2", "messag2", "mensagem2"];
+    for (const c of candidates) {
+      if (step && typeof step[c] === "string" && step[c].length > 0) return step[c] as string;
+    }
+    return undefined;
+  }
 
   function renderText(raw?: string) {
     if (!raw) return "";
@@ -66,6 +121,34 @@ export default function ChatRunner() {
     }
   }
 
+  // dispara mensagens do step atual (proteção contra re-emissão)
+  useEffect(() => {
+    const step = steps[currentIndex];
+    if (!step) return;
+
+    if (emittedStepsRef.current.has(currentIndex)) {
+      setWaitingUser(true);
+      return;
+    }
+
+    const raw1 = getStepField(step, "message1");
+    const raw2 = getStepField(step, "message2");
+
+    if (raw1) {
+      const m1 = renderText(raw1);
+      setMensages((prev) => [...prev, { from: "bot", text: m1 }]);
+    }
+
+    if (raw2 && raw2 !== "pass") {
+      const m2 = renderText(raw2);
+      setMensages((prev) => [...prev, { from: "bot", text: m2 }]);
+    }
+
+    emittedStepsRef.current.add(currentIndex);
+    setWaitingUser(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, steps]);
+
   function goToNextStepFrom(index: number) {
     const current = steps[index];
     if (!current) return;
@@ -83,20 +166,6 @@ export default function ChatRunner() {
     if (nextIndex !== -1) setCurrentIndex(nextIndex);
   }
 
-  // lança mensagens do bot quando muda de step
-  useEffect(() => {
-    const step = steps[currentIndex];
-    if (!step) return;
-    const m1 = renderText(step.mensage1);
-    setMensages((m) => [...m, { from: "bot", text: m1 }]);
-    if (step.mensage2 && step.mensage2 !== "pass") {
-      const m2 = renderText(step.mensage2);
-      setMensages((m) => [...m, { from: "bot", text: m2 }]);
-    }
-    setWaitingUser(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex]);
-
   function handleUserSend(text: string) {
     const step = steps[currentIndex];
     if (!step) return;
@@ -104,7 +173,7 @@ export default function ChatRunner() {
     const key = keyForStepId(step.id);
     if (key) setVars((prev) => ({ ...prev, [key]: text }));
     setWaitingUser(false);
-    setTimeout(() => goToNextStepFrom(currentIndex), 250);
+    setTimeout(() => goToNextStepFrom(currentIndex), 200);
   }
 
   function handleOptionSelect(value: string, text: string) {
@@ -114,31 +183,27 @@ export default function ChatRunner() {
     const key = keyForStepId(step.id);
     if (key) setVars((prev) => ({ ...prev, [key]: value }));
     setWaitingUser(false);
-    setTimeout(() => goToNextStepFrom(currentIndex), 200);
+    setTimeout(() => goToNextStepFrom(currentIndex), 150);
   }
 
-  // MOBILE: portal full-screen (sempre ocupa toda a viewport em telas menores).
+  // MOBILE portal: posicionado abaixo do header do layout
   const mobilePortal =
-    typeof document !== "undefined"
+    mounted && typeof document !== "undefined"
       ? createPortal(
           <div
-            className="fixed inset-0 z-[9999] md:hidden flex flex-col bg-black text-white"
+            // not using inset-0: we set top & height based on measured headerHeight
+            className="fixed left-0 right-0 z-[40] md:hidden flex flex-col bg-black text-white"
             role="dialog"
             aria-modal="true"
             style={{
-              width: "100vw",
-              height: "100vh",
-              paddingTop: "env(safe-area-inset-top)",
+              top: headerHeight,
+              height: `calc(100vh - ${headerHeight}px)`,
+              // width: "100vw", // left/right 0 already covers width
               paddingBottom: "env(safe-area-inset-bottom)",
             }}
           >
-            {/* header simples (sem botão de fechar, pois é fixo) */}
-            <div className="flex items-center px-4 py-3 border-b border-gray-800">
-              <h3 className="text-sm font-medium">Chat — {Barbearia?.nome ?? "Barbearia"}</h3>
-            </div>
-
-            {/* mensages area (ocupa todo o restante) */}
-            <div ref={containerRef} className="flex-1 overflow-auto p-6 w-full h-full">
+            {/* messages area */}
+            <div ref={containerRef} className="flex-1 overflow-auto p-6 w-full h-full chat-scroll">
               <div className="space-y-3 w-full max-w-none">
                 {mensages.map((m, i) =>
                   m.from === "bot" ? (
@@ -156,11 +221,10 @@ export default function ChatRunner() {
 
             {/* input fixado */}
             <div className="p-4 bg-gray-800 border-t border-gray-700">
-              {waitingUser ? (
                 <>
                   {steps[currentIndex] && steps[currentIndex].options && (
                     <div className="flex gap-2 mb-3 flex-wrap">
-                      {steps[currentIndex].options!.map((o) => (
+                      {steps[currentIndex].options!.map((o: any) => (
                         <button
                           key={o.value}
                           onClick={() => handleOptionSelect(o.value, o.text)}
@@ -176,13 +240,6 @@ export default function ChatRunner() {
                     <ChatInput blocked={false} placeholder="Escreva sua resposta..." onSend={(t) => handleUserSend(t)} />
                   )}
                 </>
-              ) : (
-                <div className="flex justify-end">
-                  <button onClick={() => goToNextStepFrom(currentIndex)} className="px-4 py-2 rounded bg-green-600 text-white">
-                    Avançar
-                  </button>
-                </div>
-              )}
             </div>
           </div>,
           document.body
@@ -191,13 +248,13 @@ export default function ChatRunner() {
 
   return (
     <>
-      {/* mobile full-screen overlay (sempre renderizado em telas pequenas) */}
+      {/* mobile overlay (positioned below layout header) */}
       {mobilePortal}
 
       {/* DESKTOP layout (aparece em md+) - caixa centralizada */}
       <div className="hidden md:flex w-[80vw] h-[80vh] rounded-2xl overflow-hidden border border-gray-600 flex-col mx-auto">
-        <div className="flex-1 overflow-auto p-6 bg-gray-900">
-          <div className="space-y-3 max-w-3xl mx-auto">
+        <div className="flex-1 overflow-auto p-6 bg-gray-900 chat-scroll">
+          <div className="space-y-3 w-full mx-auto">
             {mensages.map((m, i) =>
               m.from === "bot" ? (
                 <div key={i} className="flex justify-start">
@@ -213,11 +270,10 @@ export default function ChatRunner() {
         </div>
 
         <div className="p-4 bg-gray-800 border-t border-gray-700">
-          {waitingUser ? (
             <>
               {steps[currentIndex] && steps[currentIndex].options && (
                 <div className="flex gap-2 mb-3 flex-wrap">
-                  {steps[currentIndex].options!.map((o) => (
+                  {steps[currentIndex].options!.map((o: any) => (
                     <button
                       key={o.value}
                       onClick={() => handleOptionSelect(o.value, o.text)}
@@ -232,13 +288,6 @@ export default function ChatRunner() {
                 <ChatInput blocked={false} placeholder="Escreva sua resposta..." onSend={(t) => handleUserSend(t)} />
               )}
             </>
-          ) : (
-            <div className="flex justify-end">
-              <button onClick={() => goToNextStepFrom(currentIndex)} className="px-4 py-2 rounded bg-green-600 text-white">
-                Avançar
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </>
