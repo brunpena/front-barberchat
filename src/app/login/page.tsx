@@ -80,7 +80,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
+    <main className="h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
       <div className="w-full max-w-md bg-gray-850/90 backdrop-blur-sm rounded-2xl border border-gray-700 shadow-lg overflow-hidden">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-white mb-1">Entrar</h1>

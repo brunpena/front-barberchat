@@ -27,7 +27,7 @@ export default function HomePage() {
 
 
   return (
-    <main className="flex itemns-center justify-center h-full">
+    <main className="flex items-center justify-center h-screen">
         
           {/* <BoxBot mensage={PrimeiraVez.steps[0].mensage1} />
           <BoxBot mensage={PrimeiraVez.steps[0].mensage2} />

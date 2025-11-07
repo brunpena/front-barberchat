@@ -25,7 +25,7 @@ const PrimeiraVez: Flow = {
         {
             id: "1",
             mensage1: `Olá, tudo bem? Seja bem-vindo(a)! Sou o assistente virtual do(a) ${Barbearia.nome} e cuido dos agendamentos dele(a), ok?`,
-            mensage2: "Pra começar, qual é o seu **nome e sobrenome**?",
+            mensage2: `Pra começar, qual é o seu **nome e sobrenome**?`,
             next: "2",
         },
         {
@@ -40,6 +40,20 @@ const PrimeiraVez: Flow = {
             mensage1:
                 "Beleza! Agora me conta, qual **serviço** você quer agendar hoje?",
             mensage2: "pass",
+            options: [
+                {
+                text: `${Barbearia.servicos[0].nome} - R$${Barbearia.servicos[0].preco.toFixed(2)}`,
+                value: `${Barbearia.servicos[0].nome}`,
+                },
+                {
+                text: `${Barbearia.servicos[1].nome} - R$${Barbearia.servicos[1].preco.toFixed(2)}`,
+                value: `${Barbearia.servicos[1].nome}`,
+                },
+                {
+                text: `${Barbearia.servicos[2].nome} - R$${Barbearia.servicos[2].preco.toFixed(2)}`,
+                value: `${Barbearia.servicos[2].nome}`,
+                }
+            ],
             next: "4",
         },
         {

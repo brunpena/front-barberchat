@@ -223,7 +223,7 @@ export default function ChatRunner() {
             <div className="p-4 bg-gray-800 border-t border-gray-700">
                 <>
                   {steps[currentIndex] && steps[currentIndex].options && (
-                    <div className="flex gap-2 mb-3 flex-wrap">
+                    <div className="flex justify-center items-center gap-2">
                       {steps[currentIndex].options!.map((o: any) => (
                         <button
                           key={o.value}
@@ -272,7 +272,7 @@ export default function ChatRunner() {
         <div className="p-4 bg-gray-800 border-t border-gray-700">
             <>
               {steps[currentIndex] && steps[currentIndex].options && (
-                <div className="flex gap-2 mb-3 flex-wrap">
+                <div className="flex justify-center items-center gap-2">
                   {steps[currentIndex].options!.map((o: any) => (
                     <button
                       key={o.value}
