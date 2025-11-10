@@ -7,6 +7,8 @@ import PrimeiraVez from "@/Fluxos/PrimeiraVez";
 import Barbearia from "@/Barbearia/MinhaBarbearia";
 import { BoxBot, BoxUser } from "@/components/BoxMensege";
 import ChatInput from "@/components/WhatsAppChat";
+import DayTime from "@/components/DayTime";
+import BarberPicker from "@/components/BarberSelect";
 
 type Mensage = { from: "bot" | "user"; text: string };
 
@@ -21,22 +23,16 @@ export default function ChatRunner() {
     servico: "",
     horario: "",
     notificacoes: "",
+    barbeiro: "",
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const emittedStepsRef = useRef<Set<number>>(new Set()); // evita re-emissão
-
-  // mounted flag (para evitar hydratation mismatch)
+  const emittedStepsRef = useRef<Set<number>>(new Set());
   const [mounted, setMounted] = useState(false);
-
-  // --- header height logic -----------------------
   const [headerHeight, setHeaderHeight] = useState<number>(0);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => setMounted(true), []);
 
-  // measure header height after mount; re-measure on resize
   useEffect(() => {
     if (!mounted) return;
     const findHeader = () =>
@@ -52,20 +48,20 @@ export default function ChatRunner() {
 
     update();
     window.addEventListener("resize", update);
-    // also observe potential header size change (optional)
     let ro: ResizeObserver | null = null;
-    const hdr = document.querySelector<HTMLElement>("header") || document.getElementById("cabecalho") || document.querySelector<HTMLElement>("[data-layout-header]");
+    const hdr =
+      document.querySelector<HTMLElement>("header") ||
+      document.getElementById("cabecalho") ||
+      document.querySelector<HTMLElement>("[data-layout-header]");
     if (hdr && "ResizeObserver" in window) {
       ro = new ResizeObserver(() => update());
       ro.observe(hdr);
     }
-
     return () => {
       window.removeEventListener("resize", update);
       if (ro) ro.disconnect();
     };
   }, [mounted]);
-  // -----------------------------------------------
 
   // auto-scroll quando mensagens mudam
   useEffect(() => {
@@ -74,7 +70,7 @@ export default function ChatRunner() {
     el.scrollTop = el.scrollHeight;
   }, [mensages]);
 
-  // bloquear scroll do body apenas quando montado (evita acessar document no SSR)
+  // bloquear scroll do body apenas quando montado
   useEffect(() => {
     if (!mounted) return;
     const original = document.body.style.overflow;
@@ -84,7 +80,6 @@ export default function ChatRunner() {
     };
   }, [mounted]);
 
-  // helpers para pegar message1/message2 mesmo com typos
   function getStepField(step: any, fieldBase: "message1" | "message2") {
     const candidates =
       fieldBase === "message1"
@@ -186,19 +181,35 @@ export default function ChatRunner() {
     setTimeout(() => goToNextStepFrom(currentIndex), 150);
   }
 
+  // handler para quando o DayTime confirmar
+  function handleDayTimeConfirm(date: Date, time: string, message?: string) {
+    const text = message ?? `${date.toLocaleDateString("pt-BR").slice(0, 8)} - ${time}`;
+    setMensages((m) => [...m, { from: "user", text }]);
+    setVars((prev) => ({ ...prev, horario: text }));
+    setWaitingUser(false);
+    setTimeout(() => goToNextStepFrom(currentIndex), 200);
+  }
+
+  // handler para quando o BarberPicker confirmar
+  function handleBarberConfirm(barber: { id: string; name: string }, message?: string) {
+    const text = message ?? `Barbeiro escolhido: ${barber.name}`;
+    setMensages((m) => [...m, { from: "user", text }]);
+    setVars((prev) => ({ ...prev, barbeiro: barber.name }));
+    setWaitingUser(false);
+    setTimeout(() => goToNextStepFrom(currentIndex), 200);
+  }
+
   // MOBILE portal: posicionado abaixo do header do layout
   const mobilePortal =
     mounted && typeof document !== "undefined"
       ? createPortal(
           <div
-            // not using inset-0: we set top & height based on measured headerHeight
             className="fixed left-0 right-0 z-[40] md:hidden flex flex-col bg-black text-white"
             role="dialog"
             aria-modal="true"
             style={{
               top: headerHeight,
               height: `calc(100vh - ${headerHeight}px)`,
-              // width: "100vw", // left/right 0 already covers width
               paddingBottom: "env(safe-area-inset-bottom)",
             }}
           >
@@ -216,30 +227,52 @@ export default function ChatRunner() {
                     </div>
                   )
                 )}
+
+                {/* --- Aqui: DayTime renderizado DENTRO da área de mensagens --- */}
+                {steps[currentIndex] && steps[currentIndex].component === "DayTime" && (
+                  <div className="flex justify-center">
+                    <div className="w-full max-w-md">
+                      <DayTime onConfirm={handleDayTimeConfirm} />
+                    </div>
+                  </div>
+                )}
+
+                {/* --- Aqui: BarberPicker renderizado DENTRO da área de mensagens (mobile) --- */}
+                {steps[currentIndex] && steps[currentIndex].component === "BarberPicker" && typeof BarberPicker === "function" && (
+                  <div className="flex justify-center">
+                    <div className="w-full max-w-md">
+                      <BarberPicker onConfirm={handleBarberConfirm} />
+                    </div>
+                  </div>
+                )}
+                {/* ------------------------------------------------------------------ */}
               </div>
             </div>
 
             {/* input fixado */}
             <div className="p-4 bg-gray-800 border-t border-gray-700">
-                <>
-                  {steps[currentIndex] && steps[currentIndex].options && (
-                    <div className="flex justify-center items-center gap-2">
-                      {steps[currentIndex].options!.map((o: any) => (
-                        <button
-                          key={o.value}
-                          onClick={() => handleOptionSelect(o.value, o.text)}
-                          className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-                        >
-                          {o.text}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              <>
+                {steps[currentIndex] && steps[currentIndex].options && (
+                  <div className="flex justify-center items-center gap-2 mb-3">
+                    {steps[currentIndex].options!.map((o: any) => (
+                      <button
+                        key={o.value}
+                        onClick={() => handleOptionSelect(o.value, o.text)}
+                        className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+                      >
+                        {o.text}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                  {!steps[currentIndex].options && (
+                {/* não mostrar ChatInput quando o DayTime ou BarberPicker estiver visível */}
+                {!steps[currentIndex].options &&
+                  steps[currentIndex].component !== "DayTime" &&
+                  steps[currentIndex].component !== "BarberPicker" && (
                     <ChatInput blocked={false} placeholder="Escreva sua resposta..." onSend={(t) => handleUserSend(t)} />
                   )}
-                </>
+              </>
             </div>
           </div>,
           document.body
@@ -248,10 +281,9 @@ export default function ChatRunner() {
 
   return (
     <>
-      {/* mobile overlay (positioned below layout header) */}
       {mobilePortal}
 
-      {/* DESKTOP layout (aparece em md+) - caixa centralizada */}
+      {/* DESKTOP layout */}
       <div className="hidden md:flex w-[80vw] h-[80vh] rounded-2xl overflow-hidden border border-gray-600 flex-col mx-auto">
         <div className="flex-1 overflow-auto p-6 bg-gray-900 chat-scroll">
           <div className="space-y-3 w-full mx-auto">
@@ -266,28 +298,50 @@ export default function ChatRunner() {
                 </div>
               )
             )}
+
+            {/* --- Aqui: DayTime renderizado DENTRO da área de mensagens (desktop) --- */}
+            {steps[currentIndex] && steps[currentIndex].component === "DayTime" && (
+              <div className="flex justify-center">
+                <div className="w-full max-w-md">
+                  <DayTime onConfirm={handleDayTimeConfirm} />
+                </div>
+              </div>
+            )}
+
+            {/* --- Aqui: BarberPicker renderizado DENTRO da área de mensagens (desktop) --- */}
+            {steps[currentIndex] && steps[currentIndex].component === "BarberPicker" && (
+              <div className="flex justify-center">
+                <div className="w-full max-w-md">
+                  <BarberPicker onConfirm={handleBarberConfirm} />
+                </div>
+              </div>
+            )}
+            {/* ------------------------------------------------------------------------------ */}
           </div>
         </div>
 
         <div className="p-4 bg-gray-800 border-t border-gray-700">
-            <>
-              {steps[currentIndex] && steps[currentIndex].options && (
-                <div className="flex justify-center items-center gap-2">
-                  {steps[currentIndex].options!.map((o: any) => (
-                    <button
-                      key={o.value}
-                      onClick={() => handleOptionSelect(o.value, o.text)}
-                      className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-                    >
-                      {o.text}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {!steps[currentIndex].options && (
+          <>
+            {steps[currentIndex] && steps[currentIndex].options && (
+              <div className="flex justify-center items-center gap-2 mb-3">
+                {steps[currentIndex].options!.map((o: any) => (
+                  <button
+                    key={o.value}
+                    onClick={() => handleOptionSelect(o.value, o.text)}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+                  >
+                    {o.text}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!steps[currentIndex].options &&
+              steps[currentIndex].component !== "DayTime" &&
+              steps[currentIndex].component !== "BarberPicker" && (
                 <ChatInput blocked={false} placeholder="Escreva sua resposta..." onSend={(t) => handleUserSend(t)} />
               )}
-            </>
+          </>
         </div>
       </div>
     </>

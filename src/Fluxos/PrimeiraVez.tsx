@@ -9,6 +9,7 @@ interface FlowStep {
     id: string;
     mensage1: string;
     mensage2: string;
+    component?: string;
     next?: string;
     options?: FlowOption[];
     end?: boolean;
@@ -25,20 +26,20 @@ const PrimeiraVez: Flow = {
         {
             id: "1",
             mensage1: `Olá, tudo bem? Seja bem-vindo(a)! Sou o assistente virtual do(a) ${Barbearia.nome} e cuido dos agendamentos dele(a), ok?`,
-            mensage2: `Pra começar, qual é o seu **nome e sobrenome**?`,
+            mensage2: `Pra começar, qual é o seu nome e sobrenome?`,
             next: "2",
         },
         {
             id: "2",
             mensage1: "Tudo bem {{nome}}? Muito prazer!",
             mensage2:
-                "Qual é o seu **número de telefone**? Assim consigo entrar em contato se precisar falar com você sobre o agendamento.",
+                "Qual é o seu número de telefone? Assim consigo entrar em contato se precisar falar com você sobre o agendamento.",
             next: "3",
         },
         {
             id: "3",
             mensage1:
-                "Beleza! Agora me conta, qual **serviço** você quer agendar hoje?",
+                "Beleza! Agora me conta, qual serviço você quer agendar hoje?",
             mensage2: "pass",
             options: [
                 {
@@ -58,14 +59,22 @@ const PrimeiraVez: Flow = {
         },
         {
             id: "4",
-            mensage1: "Boa escolha! 🔥 Que **dia e horário** você quer marcar?",
+            mensage1: "Boa escolha! 🔥 Que dia e horário você quer marcar?",
             mensage2: "pass",
+            component: "DayTime",
             next: "5",
         },
         {
-            id: "5",
+          id: "5",
+          mensage1: "Agora escolha um dos nossos profissionais para te atender!",
+          mensage2:"pass",
+          component: "BarberPicker",
+          next: "6",
+        },
+        {
+            id: "6",
             mensage1:
-                "Quer que eu **ative as notificações** pra te lembrar do horário e te avisar se tiver alguma mudança?",
+                "Quer que eu ative as notificações pra te lembrar do horário e te avisar se tiver alguma mudança?",
             mensage2: "pass",
             options: [
                 {
@@ -77,13 +86,13 @@ const PrimeiraVez: Flow = {
                 value: "nao",
                 },
             ],
-            next: "6",
+            next: "7",
         },
         {
-            id: "6",
+            id: "7",
             mensage1: "Perfeito, {{nome}}! Tudo certinho com o seu agendamento 💪",
             mensage2:
-                "Pode conferir ele quando quiser lá no **menu**, na opção **“Meus agendamentos”**. Valeu por agendar com a gente! Até logo!",
+                "Pode conferir ele quando quiser lá no menu, na opção “Meus agendamentos”. Valeu por agendar com a gente! Até logo!",
             end: true,
         },
     ],
